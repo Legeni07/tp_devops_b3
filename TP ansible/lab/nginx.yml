@@ -1,0 +1,32 @@
+---
+# TP 5.2 : premier playbook – installer nginx et publier une page
+- name: Installer et configurer nginx
+  hosts: web
+  become: true
+
+  tasks:
+    - name: Installer nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Publier la page d'accueil
+      ansible.builtin.template:
+        src: templates/index.html.j2
+        dest: /var/www/html/index.html
+        mode: "0644"
+      notify: Recharger nginx
+
+    - name: Démarrer nginx et l'activer au démarrage
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Recharger nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded

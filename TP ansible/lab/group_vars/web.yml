@@ -1,0 +1,9 @@
+---
+page_title: "Legeni – serveurs web"
+paquets_communs:
+  - curl
+  - git
+  - htop
+equipe:
+  - {nom: Alice, role: Dev}
+  - {nom: Bob, role: Ops}

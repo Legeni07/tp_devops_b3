@@ -1,0 +1,7 @@
+---
+# TP 5.4 : un playbook qui ne fait qu'assembler des rôles
+- name: Déployer l'application fil rouge sur les serveurs web
+  hosts: web
+  become: true
+  roles:
+    - webapp          # le rôle docker est appelé automatiquement (dépendance dans meta/main.yml)

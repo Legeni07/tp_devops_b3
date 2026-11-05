@@ -1,0 +1,40 @@
+---
+- name: "install webapp v5"
+  become: yes
+  hosts: prod
+  tags: webapp_v5
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  tasks:
+    - name: "Clean Folder"
+      file:
+        path: "/home/{{ ansible_user }}/webapp"
+        state: absent
+    - name: Create webapp directory
+      file:
+        path: "/home/{{ ansible_user }}/webapp/"
+        state: directory
+    - name: "Install git"
+      yum:
+        name: git
+        state: present
+        update_cache: yes
+    - name: "git clone to nginx folder"
+      git:
+        repo: https://github.com/diranetafen/static-website-example.git
+        dest: /home/{{ ansible_user }}/webapp/
+
+    - name: Generate html
+      template:
+        src: templates/index.html.j2
+        dest: "/home/{{ ansible_user }}/webapp/index.html"
+    - name: "Launching an HTTPD Container"
+      docker_container:
+        name: apache-server
+        image: httpd
+        state: started
+        ports:
+          - "8000:80"
+        volumes:
+          - /home/{{ ansible_user }}/webapp:/usr/local/apache2/htdocs/
+...

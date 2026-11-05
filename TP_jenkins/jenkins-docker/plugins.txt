@@ -1,0 +1,26 @@
+# Pipelines
+workflow-aggregator
+pipeline-stage-view
+pipeline-utility-steps
+pipeline-graph-view
+# Git / GitHub
+git
+github
+github-branch-source
+# Docker
+docker-workflow
+docker-build-step
+# Credentials, SSH, déploiement
+credentials-binding
+ssh-agent
+ansible
+kubernetes-cli
+# Tests et rapports
+junit
+coverage
+warnings-ng
+http_request
+# Confort
+timestamper
+ws-cleanup
+email-ext

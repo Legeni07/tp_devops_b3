@@ -1,0 +1,47 @@
+---
+# TP 5.5 : WordPress avec Docker Compose, secrets chiffrés par Ansible Vault
+#   ansible-playbook wordpress.yml --ask-vault-pass
+- name: Déployer WordPress
+  hosts: wordpress_servers
+  become: true
+  vars_files:
+    - vars/wordpress.yml          # variables non sensibles
+    - vars/wordpress_secrets.yml  # fichier chiffré avec ansible-vault
+
+  pre_tasks:
+    - name: Vérifier que les secrets sont définis
+      ansible.builtin.assert:
+        that:
+          - mysql_password | length >= 12
+          - mysql_root_password | length >= 12
+        fail_msg: "Mots de passe absents ou trop courts (12 caractères minimum)"
+
+  roles:
+    - docker
+
+  tasks:
+    - name: Créer le dossier de l'application
+      ansible.builtin.file:
+        path: "{{ wordpress_dir }}"
+        state: directory
+        mode: "0750"
+
+    - name: Générer le docker-compose.yml
+      ansible.builtin.template:
+        src: templates/wordpress-compose.yml.j2
+        dest: "{{ wordpress_dir }}/docker-compose.yml"
+        mode: "0600"            # contient des mots de passe
+
+    - name: Démarrer la stack WordPress
+      community.docker.docker_compose_v2:
+        project_src: "{{ wordpress_dir }}"
+        state: present
+
+    - name: Vérifier que WordPress répond
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ wordpress_port }}/wp-admin/install.php"
+        status_code: 200
+      register: wp
+      retries: 30          # MariaDB met jusqu'à 1 à 2 min à s'initialiser
+      delay: 5
+      until: wp.status == 200

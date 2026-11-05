@@ -1,0 +1,48 @@
+---
+- name: Créer le réseau Docker de l'application
+  community.docker.docker_network:
+    name: "{{ webapp_network }}"
+
+- name: Démarrer Redis
+  community.docker.docker_container:
+    name: redis
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "{{ webapp_redis_password }}"]
+    networks:
+      - name: "{{ webapp_network }}"
+    volumes:
+      - "{{ webapp_redis_volume }}:/data"
+    restart_policy: unless-stopped
+  no_log: true                   # la commande contient le mot de passe
+
+- name: Démarrer l'application
+  community.docker.docker_container:
+    name: webapp
+    image: "{{ webapp_image }}:{{ webapp_version }}"
+    env:
+      APP_ENV: "{{ webapp_env }}"
+      APP_COLOR: "{{ webapp_color }}"
+      REDIS_HOST: redis
+      REDIS_PASSWORD: "{{ webapp_redis_password }}"
+    networks:
+      - name: "{{ webapp_network }}"
+    published_ports:
+      - "{{ webapp_port }}:5000"
+    restart_policy: unless-stopped
+  no_log: true
+
+- name: Attendre que l'application soit prête
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ webapp_port }}/ready"
+    status_code: 200
+  register: ready
+  retries: 15
+  delay: 2
+  until: ready.status == 200
+
+- name: Vérifier la version déployée
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ webapp_port }}/api/info"
+    return_content: true
+  register: info
+  failed_when: info.json.version != webapp_version

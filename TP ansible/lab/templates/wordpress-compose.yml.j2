@@ -1,0 +1,36 @@
+# Fichier généré par Ansible (TP 5.5) – ne pas modifier à la main
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: "{{ mysql_database }}"
+      MARIADB_USER: "{{ mysql_user }}"
+      MARIADB_PASSWORD: "{{ mysql_password }}"
+      MARIADB_ROOT_PASSWORD: "{{ mysql_root_password }}"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      retries: 10
+    restart: unless-stopped
+
+  wordpress:
+    image: wordpress:6-apache
+    ports:
+      - "{{ wordpress_port }}:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: "{{ mysql_database }}"
+      WORDPRESS_DB_USER: "{{ mysql_user }}"
+      WORDPRESS_DB_PASSWORD: "{{ mysql_password }}"
+    volumes:
+      - wp_content:/var/www/html/wp-content
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  wp_content:

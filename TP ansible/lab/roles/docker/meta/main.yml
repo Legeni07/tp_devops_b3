@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: docker
+  author: legeni
+  description: Installe Docker CE depuis le dépôt officiel
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions: [jammy, noble]
+dependencies: []

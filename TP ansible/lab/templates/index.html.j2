@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="fr">
+<head><meta charset="utf-8"><title>{{ page_title | default('Lab Ansible') }}</title></head>
+<body style="font-family: sans-serif">
+  <h1>{{ page_title | default('Lab Ansible') }}</h1>
+  <p>Serveur : <b>{{ inventory_hostname }}</b> ({{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }})</p>
+  <p>Adresse IP : {{ ansible_facts['default_ipv4']['address'] | default('inconnue') }}</p>
+  <p>Mémoire : {{ ansible_facts['memtotal_mb'] }} Mo – CPU : {{ ansible_facts['processor_vcpus'] }}</p>
+{% if equipe is defined %}
+  <h2>Équipe</h2>
+  <ul>
+{% for membre in equipe %}
+    <li>{{ membre.nom }} – {{ membre.role }}</li>
+{% endfor %}
+  </ul>
+{% endif %}
+  <p><small>Page générée par Ansible – ne pas modifier à la main</small></p>
+</body>
+</html>

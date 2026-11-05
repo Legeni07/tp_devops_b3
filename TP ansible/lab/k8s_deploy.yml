@@ -1,0 +1,79 @@
+---
+# TP 5.6 : déployer l'application fil rouge dans Kubernetes avec Ansible
+#   ansible-playbook k8s_deploy.yml -e target_env=staging -e app_version=1.0.0
+# Prérequis sur la machine de contrôle : pip install kubernetes ; collection kubernetes.core
+- name: Déploiement Kubernetes de l'application fil rouge
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    target_env: staging
+    app_image: "{{ webapp_image | default('legeni07/legeni-webapp') }}"
+    app_version: "1.0.0"
+    redis_password: "{{ lookup('ansible.builtin.env', 'REDIS_PASSWORD') | default('changeme', true) }}"
+
+  pre_tasks:
+    - name: Charger les variables de l'environnement cible
+      ansible.builtin.include_vars: "vars/k8s_{{ target_env }}.yml"
+
+  tasks:
+    - name: Créer le namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ k8s_namespace }}"
+            labels: {env: "{{ app_env }}"}
+
+    - name: Créer le secret Redis
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: redis-secret
+            namespace: "{{ k8s_namespace }}"
+          type: Opaque
+          stringData:
+            REDIS_PASSWORD: "{{ redis_password }}"
+      no_log: true
+
+    - name: Déployer avec rollback automatique en cas d'échec
+      block:
+        - name: Appliquer les manifests et attendre la fin du rolling update
+          kubernetes.core.k8s:
+            state: present
+            template: templates/k8s/webapp.yml.j2
+            wait: true
+            wait_timeout: 180
+
+        - name: Smoke test depuis le cluster
+          kubernetes.core.k8s_exec:
+            namespace: "{{ k8s_namespace }}"
+            pod: "{{ lookup('kubernetes.core.k8s', kind='Pod', namespace=k8s_namespace, label_selector='app=webapp')[0].metadata.name }}"
+            command: >-
+              python -c "import json,urllib.request;
+              d=json.load(urllib.request.urlopen('http://webapp/api/info'));
+              assert d['version']=='{{ app_version }}', d; print(d)"
+          register: smoke
+          changed_when: false
+
+        - name: Résultat
+          ansible.builtin.debug:
+            msg: "{{ app_env }} OK : {{ smoke.stdout | trim }}"
+
+      rescue:
+        - name: Retour à la version précédente
+          kubernetes.core.k8s_rollback:
+            api_version: apps/v1
+            kind: Deployment
+            name: webapp
+            namespace: "{{ k8s_namespace }}"
+
+        - name: Échouer explicitement (le pipeline doit passer au rouge)
+          ansible.builtin.fail:
+            msg: "Déploiement de {{ app_version }} en {{ app_env }} échoué : rollback effectué"

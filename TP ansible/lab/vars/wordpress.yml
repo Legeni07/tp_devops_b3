@@ -1,0 +1,5 @@
+---
+wordpress_dir: /opt/wordpress
+wordpress_port: 8080
+mysql_database: wordpress_db
+mysql_user: wp_admin

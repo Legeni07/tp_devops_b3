@@ -1,0 +1,4 @@
+---
+page_title: "Legeni – serveur de données"
+paquets_communs:
+  - curl

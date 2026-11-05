@@ -1,0 +1,8 @@
+# ⚠️ Exemple À NE PAS REPRODUIRE : mots de passe en clair. Voir TP5.5_Vault_WordPress.md
+---
+wordpress_dir: "/opt/wordpress"
+mysql_root_password: "VotreMotDePasseRootSecurise123!"
+mysql_database: "wordpress_db"
+mysql_user: "wp_admin"
+mysql_password: "VotreMotDePasseWPSecurise123!"
+wordpress_domain: "monsite.com"

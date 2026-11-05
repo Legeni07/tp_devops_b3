@@ -1,0 +1,61 @@
+---
+# TP 5.3 : variables, facts, boucles, conditions, register
+- name: Variables, boucles et conditions
+  hosts: lab
+  become: true
+
+  vars:
+    utilisateurs:
+      - {nom: dev1, groupe: developpeurs}
+      - {nom: dev2, groupe: developpeurs}
+      - {nom: ops1, groupe: operations}
+
+  tasks:
+    - name: Afficher quelques facts
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} : {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}, {{ ansible_facts['memtotal_mb'] }} Mo"
+
+    - name: Installer les paquets communs (liste issue de group_vars)
+      ansible.builtin.apt:
+        name: "{{ paquets_communs }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Créer les groupes
+      ansible.builtin.group:
+        name: "{{ item }}"
+      loop: "{{ utilisateurs | map(attribute='groupe') | unique }}"
+
+    - name: Créer les utilisateurs
+      ansible.builtin.user:
+        name: "{{ item.nom }}"
+        groups: "{{ item.groupe }}"
+        shell: /bin/bash
+      loop: "{{ utilisateurs }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    - name: Installer nginx uniquement sur Ubuntu et dans le groupe web
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+      when:
+        - ansible_facts['distribution'] == "Ubuntu"
+        - "'web' in group_names"
+
+    - name: Mesurer l'espace disque libre
+      ansible.builtin.command: df -h /
+      register: disque
+      changed_when: false
+
+    - name: Afficher le résultat enregistré
+      ansible.builtin.debug:
+        var: disque.stdout_lines
+
+    - name: Publier la page (titre différent selon groupe_vars / host_vars)
+      ansible.builtin.template:
+        src: templates/index.html.j2
+        dest: /var/www/html/index.html
+        mode: "0644"
+      when: "'web' in group_names"

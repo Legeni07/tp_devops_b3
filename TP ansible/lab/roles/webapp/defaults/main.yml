@@ -1,0 +1,11 @@
+---
+# Toutes ces valeurs peuvent être surchargées (group_vars, host_vars, -e ...)
+webapp_image: "legeni07/legeni-webapp"
+webapp_version: "1.0.0"
+webapp_env: "dev"
+webapp_color: "#1f6feb"
+webapp_port: 8080              # port publié sur le serveur
+webapp_replicas: 1
+webapp_network: "legeni_net"
+webapp_redis_volume: "legeni_redis"
+webapp_redis_password: "changeme"   # à surcharger avec une variable chiffrée (Ansible Vault)

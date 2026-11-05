@@ -1,0 +1,119 @@
+# Manifests de l'application fil rouge, générés par Ansible (TP 5.6)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webapp-config
+  namespace: {{ k8s_namespace }}
+  labels: {app: webapp, env: {{ app_env }}}
+data:
+  APP_ENV: "{{ app_env }}"
+  APP_COLOR: "{{ app_color }}"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: {{ k8s_namespace }}
+  labels: {app: redis, env: {{ app_env }}}
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels: {app: redis}
+  template:
+    metadata:
+      labels: {app: redis, env: {{ app_env }}}
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          args: ["--requirepass", "$(REDIS_PASSWORD)", "--appendonly", "yes"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: redis-secret, key: REDIS_PASSWORD}
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            tcpSocket: {port: 6379}
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: {storage: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: {{ k8s_namespace }}
+  labels: {app: redis, env: {{ app_env }}}
+spec:
+  selector: {app: redis}
+  ports:
+    - port: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: {{ k8s_namespace }}
+  labels: {app: webapp, env: {{ app_env }}}
+spec:
+  replicas: {{ app_replicas }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels: {app: webapp}
+  template:
+    metadata:
+      labels: {app: webapp, env: {{ app_env }}}
+      annotations:
+        # change à chaque modification de la ConfigMap => rolling update automatique
+        checksum/config: "{{ (app_env ~ app_color) | hash('sha1') }}"
+    spec:
+      containers:
+        - name: webapp
+          image: "{{ app_image }}:{{ app_version }}"
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - configMapRef: {name: webapp-config}
+            - secretRef: {name: redis-secret}
+          readinessProbe:
+            httpGet: {path: /ready, port: 5000}
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: {path: /health, port: 5000}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: {{ k8s_namespace }}
+  labels: {app: webapp, env: {{ app_env }}}
+spec:
+  type: NodePort
+  selector: {app: webapp}
+  ports:
+    - port: 80
+      targetPort: 5000
+      nodePort: {{ app_node_port }}

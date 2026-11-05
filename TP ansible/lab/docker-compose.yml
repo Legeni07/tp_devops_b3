@@ -1,0 +1,38 @@
+# Lab Ansible : 3 "serveurs" Ubuntu joignables en SSH depuis la machine de contrôle
+#   ssh-keygen -t ed25519 -f keys/id_ansible -N ""     (une seule fois)
+#   docker compose up -d --build
+x-node: &node
+  build:
+    context: .
+    dockerfile: node/Dockerfile
+  image: legeni/ansible-node:24.04
+  privileged: true          # nécessaire pour systemd et pour Docker dans le nœud (TP 5.4)
+  cgroup: host
+  tmpfs: [/run, /run/lock, /tmp]
+  restart: unless-stopped
+
+services:
+  web1:
+    <<: *node
+    hostname: web1
+    ports: ["2221:22", "8001:80", "8101:8080"]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "web1_docker:/var/lib/docker", "web1_containerd:/var/lib/containerd"]
+  web2:
+    <<: *node
+    hostname: web2
+    ports: ["2222:22", "8002:80", "8102:8080"]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "web2_docker:/var/lib/docker", "web2_containerd:/var/lib/containerd"]
+  db1:
+    <<: *node
+    hostname: db1
+    ports: ["2223:22", "8003:80", "8103:8080"]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "db1_docker:/var/lib/docker", "db1_containerd:/var/lib/containerd"]
+
+# Docker installé DANS les nœuds (TP 5.4) a besoin de dossiers hors overlayfs
+volumes:
+  web1_docker:
+  web1_containerd:
+  web2_docker:
+  web2_containerd:
+  db1_docker:
+  db1_containerd:

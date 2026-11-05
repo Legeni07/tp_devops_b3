@@ -1,0 +1,10 @@
+---
+# Utilisateurs autorisés à utiliser Docker sans sudo
+docker_users:
+  - "{{ ansible_user }}"
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+  - docker-buildx-plugin
