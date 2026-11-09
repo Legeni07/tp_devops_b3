@@ -121,6 +121,8 @@ pipeline {
 	- Branch Specifier : `*/main` – Script Path : `Jenkinsfile`
 	- **Save**
 
+	> ⚠️ Ne collez **pas** le Jenkinsfile dans le champ *Pipeline script* : dans ce mode, Jenkins ne clone pas le dépôt, l'espace de travail reste vide et le premier `docker build` échoue (`open Dockerfile: no such file or directory`). C'est le mode *from SCM* qui récupère le code **et** le Jenkinsfile depuis Git.
+
 5. Exécuter
 	- Premier **Lancer un build** : Jenkins découvre les paramètres définis dans le Jenkinsfile
 	- Ensuite **Build with Parameters** → `DOCKERHUB_ID` = votre identifiant → **Build**
@@ -143,6 +145,15 @@ pipeline {
 - [ ] L'image `1.0.<n>` est sur Docker Hub
 - [ ] Un test cassé bloque le pipeline avant le build de l'image (capture)
 - [ ] Aucun mot de passe en clair dans le Jenkinsfile ni dans la console (Jenkins masque `****`)
+
+##### Correction des erreurs fréquentes
+| Erreur | Cause | Solution |
+|---|---|---|
+| `failed to read dockerfile: open Dockerfile: no such file or directory` (et `transferring dockerfile: 2B`) | job en mode **Pipeline script** : aucun code récupéré | Definition = **Pipeline script from SCM** (étape 4) ; vérifier que `Dockerfile` est à la racine du dépôt |
+| `MissingPropertyException: No such property: groovy` | la ligne ```` ```groovy ```` du Markdown a été copiée avec le script | ne copier que de `pipeline {` à la dernière `}` |
+| `Couldn't find any revision to build` | branche `*/master` alors que le dépôt utilise `main` | corriger le **Branch Specifier** |
+| `unauthorized: incorrect username or password` | credential `dockerhub` absent ou mot de passe au lieu du jeton | étape 3 |
+| `network ci-net-<n> not found` dans *Post Actions* | le pipeline a échoué avant de créer le réseau | sans gravité : `\|\| true` ignore l'erreur |
 
 ##### 🎯 Défi
 Ajoutez un paramètre `choice` nommé `APP_COLOR` (`#1f6feb`, `#2da44e`, `#d1242f`) transmis au conteneur de test d'acceptance (`-e APP_COLOR=...`), et vérifiez dans le stage d'acceptance que la couleur apparaît dans la page.
