@@ -26,7 +26,7 @@ Dans ce TP, staging et prod sont deux stacks Docker Compose **sur la machine de 
 	- ID **redis-password-prod**, Secret : un autre mot de passe
 
 3. Remplacer le `Jenkinsfile` par la version CD :
-	```groovy
+```groovy
 // TP 3.8 : intégration continue + déploiement continu (staging automatique, prod après validation)
 pipeline {
     agent any
@@ -124,7 +124,7 @@ pipeline {
         }
     }
 }
-	```
+```
 	*Commit* + *push* sur `main`. Le job multibranch du TP 3.6 se déclenche.
 
 4. Premier déploiement

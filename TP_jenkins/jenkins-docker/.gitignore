@@ -1,0 +1,3 @@
+# Fichier propre à chaque machine : généré par
+#   echo "DOCKER_GID=$(stat -c %g /var/run/docker.sock)" > .env
+.env

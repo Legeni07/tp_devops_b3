@@ -27,7 +27,7 @@
 	- Pourquoi le test d'acceptance utilise-t-il un conteneur `curlimages/curl` sur un réseau dédié plutôt que `curl http://localhost:5000` ? *(indice : Jenkins tourne lui-même dans un conteneur)*
 	- Que se passe-t-il pour les étapes suivantes si `Tests unitaires` échoue ?
 
-	```groovy
+```groovy
 // Pipeline de référence du TP 3.5 : tests -> build -> test d'acceptance -> push
 pipeline {
     agent any
@@ -106,7 +106,7 @@ pipeline {
         }
     }
 }
-	```
+```
 
 3. Créer le credential Docker Hub
 	**Manage Jenkins** → **Credentials** → **System** → **Global credentials** → **Add Credentials**

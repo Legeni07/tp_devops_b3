@@ -12,7 +12,7 @@ Notions nouvelles :
 ---
 
 1. Ajouter le fichier `Jenkinsfile.qualite` à la racine du dépôt :
-	```groovy
+```groovy
 // TP 3.7 : contrôles qualité en parallèle, rapports de tests et quality gates
 pipeline {
     agent any
@@ -107,7 +107,7 @@ pipeline {
         }
     }
 }
-	```
+```
 
 2. Créer un job **Pipeline script from SCM** nommé **legeni-qualite**, Script Path : `Jenkinsfile.qualite`, et le lancer.
 
