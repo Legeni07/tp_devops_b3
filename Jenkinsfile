@@ -7,8 +7,10 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'DOCKERHUB_ID', defaultValue: 'legeni07', description: 'Votre identifiant Docker Hub')
+        string(name: 'DOCKERHUB_ID', defaultValue: 'legeni', description: 'Votre identifiant Docker Hub (le credential dockerhub doit appartenir à ce compte)')
         booleanParam(name: 'PUSH', defaultValue: true, description: "Pousser l'image sur Docker Hub")
+        booleanParam(name: 'DEPLOY', defaultValue: true, description: "Lancer l'application sur la machine Docker (http://localhost:<APP_PORT>)")
+        string(name: 'APP_PORT', defaultValue: '8095', description: "Port publié sur la machine hôte pour ouvrir l'application")
     }
 
     environment {
@@ -69,6 +71,20 @@ pipeline {
                         docker push $IMAGE:latest
                     '''
                 }
+            }
+        }
+
+        stage('Déploiement local') {
+            when { expression { params.DEPLOY } }
+            steps {
+                // Jenkins pilote le Docker de l'hôte (socket monté) : le conteneur tourne à côté de Jenkins,
+                // et -p publie son port 5000 sur la machine hôte -> http://localhost:APP_PORT
+                sh '''
+                    docker rm -f legeni-webapp || true
+                    docker run -d --name legeni-webapp --restart unless-stopped \
+                        -p $APP_PORT:5000 $IMAGE:$VERSION
+                '''
+                echo "Application disponible sur http://localhost:${params.APP_PORT}"
             }
         }
     }
