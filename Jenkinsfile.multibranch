@@ -1,0 +1,77 @@
+// TP 3.6 : pipeline multibranch – chaque branche est testée, seule "main" publie l'image
+// Job Jenkins : Multibranch Pipeline, source Git https://github.com/Legeni07/tp_devops_b3.git,
+//   Script Path : Jenkinsfile.multibranch (seules les branches qui contiennent ce fichier sont construites)
+pipeline {
+    agent any
+
+    environment {
+        IMAGE   = "legeni/legeni-webapp"
+        // main -> 1.0.<n> ; autre branche -> <branche>-<n> (caractères interdits remplacés par "-")
+        VERSION = "${env.BRANCH_NAME == 'main' ? '1.0.' + env.BUILD_NUMBER : env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9.-]', '-') + '-' + env.BUILD_NUMBER}"
+        // Noms uniques par branche : deux branches peuvent avoir le même numéro de build en même temps
+        CI_ID          = "${env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9]', '-').toLowerCase()}-${env.BUILD_NUMBER}"
+        TEST_CONTAINER = "webapp-mb-${CI_ID}"
+        CI_NETWORK     = "ci-net-mb-${CI_ID}"
+        APP_DIR        = "app-fil-rouge"
+    }
+
+    options {
+        timestamps()
+        timeout(time: 20, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Tests unitaires') {
+            steps {
+                dir(env.APP_DIR) {
+                    sh 'docker build --target test -t legeni-webapp:test-$CI_ID .'
+                }
+            }
+        }
+
+        stage('Build image') {
+            steps {
+                dir(env.APP_DIR) {
+                    sh 'docker build --build-arg APP_VERSION=$VERSION -t $IMAGE:$VERSION .'
+                }
+            }
+        }
+
+        stage("Test d'acceptance") {
+            steps {
+                sh '''
+                    docker network create $CI_NETWORK
+                    docker run -d --name $TEST_CONTAINER --network $CI_NETWORK $IMAGE:$VERSION
+                    docker run --rm --network $CI_NETWORK curlimages/curl:8.11.1 \
+                        -sf --retry 10 --retry-connrefused --retry-delay 1 http://$TEST_CONTAINER:5000/health
+                    docker run --rm --network $CI_NETWORK curlimages/curl:8.11.1 \
+                        -sf http://$TEST_CONTAINER:5000/ | grep -q "Version $VERSION"
+                '''
+            }
+        }
+
+        stage('Push Docker Hub') {
+            when { branch 'main' }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub',
+                                                  usernameVariable: 'DH_USER',
+                                                  passwordVariable: 'DH_TOKEN')]) {
+                    sh '''
+                        echo "$DH_TOKEN" | docker login -u "$DH_USER" --password-stdin
+                        docker push $IMAGE:$VERSION
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker rm -f $TEST_CONTAINER || true; docker network rm $CI_NETWORK || true; docker rmi legeni-webapp:test-$CI_ID || true'
+        }
+        success {
+            echo "Branche ${env.BRANCH_NAME} : image ${IMAGE}:${VERSION} validée"
+        }
+    }
+}

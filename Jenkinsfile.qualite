@@ -1,0 +1,106 @@
+// TP 3.7 : contrôles qualité en parallèle, rapports de tests et quality gates
+// Job Jenkins : Pipeline script from SCM, branche */jenkinsfile, Script Path : Jenkinsfile.qualite
+// L'application est dans app-fil-rouge/ : chaque étape s'y place avec dir(APP_DIR).
+pipeline {
+    agent any
+
+    environment {
+        IMAGE   = "legeni-webapp"
+        VERSION = "1.0.${env.BUILD_NUMBER}"
+        APP_DIR = "app-fil-rouge"
+    }
+
+    options {
+        timestamps()
+        timeout(time: 20, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Qualité du code') {
+            parallel {
+                stage('Tests unitaires') {
+                    agent {
+                        docker {
+                            image 'python:3.12-slim'
+                            args '-e HOME=/tmp'
+                            reuseNode true
+                        }
+                    }
+                    steps {
+                        dir(env.APP_DIR) {
+                            sh '''
+                                python -m venv /tmp/venv
+                                /tmp/venv/bin/pip install -q -r requirements.txt -r requirements-dev.txt
+                                mkdir -p reports
+                                /tmp/venv/bin/pytest --junitxml=reports/junit.xml \
+                                    --cov=app --cov-report=xml:reports/coverage.xml --cov-fail-under=80
+                            '''
+                        }
+                    }
+                    post {
+                        always {
+                            junit "${APP_DIR}/reports/junit.xml"
+                            recordCoverage(tools: [[parser: 'COBERTURA', pattern: "${APP_DIR}/reports/coverage.xml"]],
+                                           sourceDirectories: [[path: "${APP_DIR}"]])
+                        }
+                    }
+                }
+                stage('Lint Python') {
+                    agent {
+                        docker {
+                            image 'python:3.12-slim'
+                            args '-e HOME=/tmp'
+                            reuseNode true
+                        }
+                    }
+                    steps {
+                        dir(env.APP_DIR) {
+                            sh '''
+                                python -m venv /tmp/venv-lint
+                                /tmp/venv-lint/bin/pip install -q flake8==7.1.1
+                                mkdir -p reports
+                                /tmp/venv-lint/bin/flake8 --output-file=reports/flake8.txt --tee .
+                            '''
+                        }
+                    }
+                    post {
+                        always {
+                            recordIssues(tools: [flake8(pattern: "${APP_DIR}/reports/flake8.txt")])
+                        }
+                    }
+                }
+                stage('Lint Dockerfile') {
+                    steps {
+                        dir(env.APP_DIR) {
+                            sh 'docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build image') {
+            steps {
+                dir(env.APP_DIR) {
+                    sh 'docker build --build-arg APP_VERSION=$VERSION -t $IMAGE:$VERSION .'
+                }
+            }
+        }
+
+        stage('Scan de sécurité') {
+            steps {
+                // --exit-code 1 : le pipeline échoue si une vulnérabilité CRITICAL corrigeable est trouvée
+                sh '''
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy_cache:/root/.cache \
+                        aquasec/trivy:0.57.1 image --severity CRITICAL --ignore-unfixed --exit-code 1 $IMAGE:$VERSION
+                '''
+            }
+        }
+    }
+
+    post {
+        cleanup {
+            cleanWs()
+        }
+    }
+}

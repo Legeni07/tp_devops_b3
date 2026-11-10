@@ -1,0 +1,109 @@
+// TP 3.8 : intégration continue + déploiement continu (staging automatique, prod après validation)
+// Job Jenkins : Pipeline script from SCM, branche */jenkinsfile, Script Path : Jenkinsfile.cd
+// Credentials requis (Secret text) : redis-password-staging et redis-password-prod
+// Hors multibranch, BRANCH_NAME n'existe pas : le job est alors traité comme la branche principale.
+pipeline {
+    agent any
+
+    environment {
+        IMAGE   = "legeni-webapp"
+        VERSION = "1.0.${env.BUILD_NUMBER}"
+        COMPOSE = "docker compose -f deploy/docker-compose.deploy.yml"
+        APP_DIR = "app-fil-rouge"
+    }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()          // jamais deux déploiements en même temps
+    }
+
+    stages {
+        stage('Tests unitaires') {
+            steps {
+                dir(env.APP_DIR) {
+                    sh 'docker build --target test -t $IMAGE:test .'
+                }
+            }
+        }
+
+        stage('Build image') {
+            steps {
+                dir(env.APP_DIR) {
+                    sh 'docker build --build-arg APP_VERSION=$VERSION -t $IMAGE:$VERSION .'
+                }
+            }
+        }
+
+        stage('Déploiement staging') {
+            environment {
+                REDIS_PASSWORD = credentials('redis-password-staging')
+            }
+            steps {
+                dir(env.APP_DIR) {
+                    sh '''
+                        IMAGE_REF=$IMAGE:$VERSION APP_ENV=staging APP_COLOR='#bf8700' PORT=8081 \
+                            $COMPOSE -p legeni-staging up -d --wait
+                    '''
+                    sh './deploy/smoke-test.sh legeni-staging $VERSION'
+                }
+            }
+        }
+
+        stage('Validation production') {
+            when { expression { env.BRANCH_NAME == null || env.BRANCH_NAME == 'main' } }
+            steps {
+                timeout(time: 15, unit: 'MINUTES') {
+                    input message: "Déployer la version ${VERSION} en production ?", ok: 'Déployer'
+                }
+            }
+        }
+
+        stage('Déploiement production') {
+            when { expression { env.BRANCH_NAME == null || env.BRANCH_NAME == 'main' } }
+            environment {
+                REDIS_PASSWORD = credentials('redis-password-prod')
+            }
+            steps {
+                dir(env.APP_DIR) {
+                    script {
+                        // Image actuellement en production : servira au rollback
+                        env.PREVIOUS_IMAGE = sh(
+                            script: "docker inspect -f '{{.Config.Image}}' legeni-prod-web-1 2>/dev/null || echo none",
+                            returnStdout: true
+                        ).trim()
+                        echo "Version en production avant déploiement : ${env.PREVIOUS_IMAGE}"
+                        try {
+                            sh '''
+                                IMAGE_REF=$IMAGE:$VERSION APP_ENV=prod APP_COLOR='#2da44e' PORT=8082 \
+                                    $COMPOSE -p legeni-prod up -d --wait
+                                ./deploy/smoke-test.sh legeni-prod $VERSION
+                            '''
+                        } catch (err) {
+                            if (env.PREVIOUS_IMAGE != 'none') {
+                                echo "Smoke test KO : retour à ${env.PREVIOUS_IMAGE}"
+                                sh '''
+                                    IMAGE_REF=$PREVIOUS_IMAGE APP_ENV=prod APP_COLOR='#2da44e' PORT=8082 \
+                                        $COMPOSE -p legeni-prod up -d --wait
+                                '''
+                            }
+                            error "Déploiement production échoué, rollback effectué"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ ${env.JOB_NAME} #${env.BUILD_NUMBER} : version ${VERSION} déployée (staging :8081, prod :8082)"
+        }
+        failure {
+            echo "❌ ${env.JOB_NAME} #${env.BUILD_NUMBER} en échec"
+            // Avec le plugin Email Extension configuré (Manage Jenkins > System > Extended E-mail) :
+            // emailext to: 'equipe@legeni.cm', subject: "Échec ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            //          body: "Voir ${env.BUILD_URL}console"
+        }
+    }
+}
